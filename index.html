@@ -49,6 +49,16 @@
   .legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
   .legend .busy i{background:var(--anor)}
   .legend .free i{border:1.5px solid var(--muted)}
+  .legend .lg-sq{width:10px;height:10px;border-radius:3px}
+  .stats{display:flex;gap:12px;margin-bottom:18px}
+  .stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+  .stat b{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted);margin-bottom:2px}
+  .stat span{font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:800;color:var(--lapis)}
+  .day .pct{font-size:11px;font-weight:700}
+  .day.p1{background:#E7F7F0}.day.p1 .pct{color:#1d8a5f}
+  .day.p2{background:#FCF1DC}.day.p2 .pct{color:#B97509}
+  .day.p3{background:#FDECEA}.day.p3 .pct{color:#D24A43}
+  .day.sel{background:var(--lapis)}.day.sel .pct{color:#fff}
   .panel-date{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:19px;margin-bottom:4px}
   .panel-sub{font-size:13px;color:var(--muted);margin-bottom:14px}
   .ev{display:flex;align-items:center;gap:12px;border:1px solid var(--line);
@@ -72,8 +82,13 @@
 <div class="wrap">
   <div class="eyebrow">Shaxsiy kalendar</div>
   <h1 id="ttl"><span class="accent">Jahongir</span>ning kalendari</h1>
-  <p class="sub">Qizil nuqtali kunlar band. Bo'sh kunni tanlab, pastdagi tugma orqali bog'laning.</p>
+  <p class="sub">Har kunda bandlik foizi ko'rsatilgan (09:00–18:00 ish vaqtiga nisbatan). Yashil — bo'sh, sariq — yarim band, qizil — band. Bo'sh kunni tanlab, pastdagi tugma orqali bog'laning.</p>
   <div class="err" id="err"></div>
+
+  <div class="stats">
+    <div class="stat"><b>BU HAFTA BAND</b><span id="weekPct">—</span></div>
+    <div class="stat"><b id="monthLbl">SHU OY BAND</b><span id="monthPct">—</span></div>
+  </div>
 
   <div class="grid2">
     <section class="card">
@@ -87,8 +102,9 @@
       <div class="dow"><span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span></div>
       <div class="days" id="daysGrid"></div>
       <div class="legend">
-        <span class="busy"><i></i> Band kun</span>
-        <span class="free"><i></i> Bo'sh kun</span>
+        <span><i class="lg-sq" style="background:#1d8a5f"></i> 30% gacha</span>
+        <span><i class="lg-sq" style="background:#E8A33D"></i> 30–70%</span>
+        <span><i class="lg-sq" style="background:#D24A43"></i> 70%+</span>
       </div>
     </section>
 
@@ -112,6 +128,9 @@
 const OWNER_NAME = "Jahongir";
 const TG_USERNAME = "sp_business_agency";
 const EVENTS_URL = "events.json"; // sayt bilan bir xil repoda tursa shuni o'zgartirmang
+const ISH_BOSHI = 9;      // ish kuni boshlanishi (soat) - 100% shu oraliqqa nisbatan
+const ISH_OXIRI = 18;     // ish kuni tugashi (soat)
+const STANDART_SOAT = 1;  // tugash vaqti aytilmagan uchrashuv davomiyligi (soat)
 /* ============================================================= */
 
 const MONTHS=["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
@@ -126,6 +145,41 @@ document.getElementById('tgLink').href='https://t.me/'+TG_USERNAME.replace('@','
 
 function pad(n){return String(n).padStart(2,'0')}
 function dkey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function toMin(t){const p=String(t).split(':');return (+p[0])*60+(+p[1]||0)}
+
+function dayBusyPct(k){
+  const evs=events.filter(e=>e.date===k);
+  if(!evs.length)return 0;
+  if(evs.some(e=>!e.time))return 100;
+  const W0=ISH_BOSHI*60,W1=ISH_OXIRI*60;
+  const ivs=evs.map(e=>{
+    const s=toMin(e.time);
+    const en=e.end?toMin(e.end):s+STANDART_SOAT*60;
+    return [Math.max(s,W0),Math.min(en,W1)];
+  }).filter(iv=>iv[1]>iv[0]).sort((a,b)=>a[0]-b[0]);
+  let busy=0,cur=null;
+  for(const iv of ivs){
+    if(!cur){cur=[iv[0],iv[1]];continue;}
+    if(iv[0]<=cur[1])cur[1]=Math.max(cur[1],iv[1]);
+    else{busy+=cur[1]-cur[0];cur=[iv[0],iv[1]];}
+  }
+  if(cur)busy+=cur[1]-cur[0];
+  return Math.min(100,Math.round(busy/(W1-W0)*100));
+}
+function pctClass(p){return p<=0?'':p<30?' p1':p<70?' p2':' p3'}
+function weekPct(){
+  const now=new Date(),mon=new Date(now);
+  mon.setDate(now.getDate()-((now.getDay()+6)%7));
+  let s=0;
+  for(let i=0;i<6;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);s+=dayBusyPct(dkey(d));}
+  return Math.round(s/6);
+}
+function monthPct(){
+  const dim=new Date(view.getFullYear(),view.getMonth()+1,0).getDate();
+  let s=0;
+  for(let d=1;d<=dim;d++)s+=dayBusyPct(dkey(new Date(view.getFullYear(),view.getMonth(),d)));
+  return Math.round(s/dim);
+}
 
 async function load(){
   try{
@@ -149,13 +203,18 @@ function render(){
   for(let d=1;d<=dim;d++){
     const k=dkey(new Date(view.getFullYear(),view.getMonth(),d));
     const n=events.filter(e=>e.date===k).length;
+    const p=dayBusyPct(k);
     const b=document.createElement('button');
-    b.className='day'+(k===dkey(new Date())?' today':'')+(k===selected?' sel':'');
-    b.setAttribute('aria-label',d+' '+MONTHS[view.getMonth()]+(n?', band':', bo\u02bbsh'));
-    b.innerHTML='<span>'+d+'</span>'+(n?'<span class="dots">'+'<i></i>'.repeat(Math.min(n,3))+'</span>':'');
+    b.className='day'+(k===dkey(new Date())?' today':'')+(k===selected?' sel':'')+pctClass(p);
+    b.setAttribute('aria-label',d+' '+MONTHS[view.getMonth()]+(n?', '+p+'% band':', bo\u02bbsh'));
+    b.innerHTML='<span>'+d+'</span>'+(p>0?'<span class="pct">'+p+'%</span>'
+      :(n?'<span class="dots">'+'<i></i>'.repeat(Math.min(n,3))+'</span>':''));
     b.onclick=()=>{selected=k;render();renderPanel();};
     grid.appendChild(b);
   }
+  document.getElementById('monthLbl').textContent=MONTHS[view.getMonth()].toUpperCase()+' BAND';
+  document.getElementById('monthPct').textContent=monthPct()+'%';
+  document.getElementById('weekPct').textContent=weekPct()+'%';
 }
 
 function renderPanel(){
@@ -171,10 +230,11 @@ function renderPanel(){
     list.innerHTML='<div class="free-badge">✓ Uchrashuv uchun qulay kun</div>';
     return;
   }
-  ps.textContent=evs.length+' ta uchrashuv bor';
+  ps.textContent=evs.length+' ta uchrashuv — kun '+dayBusyPct(selected)+'% band';
   evs.forEach(e=>{
     const row=document.createElement('div');row.className='ev';
-    const t=document.createElement('span');t.className='ev-time';t.textContent=e.time||'—';
+    const t=document.createElement('span');t.className='ev-time';
+    t.textContent=e.time?(e.time+(e.end?'–'+e.end:'')):'Kun boʻyi';
     const tt=document.createElement('span');tt.className='ev-title';tt.textContent=e.title;
     row.append(t,tt);list.appendChild(row);
   });
