@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jahongirning kalendari</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Manrope:wght@400;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --lapis:#2447A8;--lapis-deep:#16306E;--feruza:#2FB7A8;--anor:#D24A43;
@@ -76,9 +76,34 @@
   .btn-contact:hover{background:var(--lapis-deep)}
   .err{background:#FDECEA;color:var(--anor);border-radius:12px;padding:12px 16px;
        font-size:14px;font-weight:600;margin-bottom:16px;display:none}
+  .oyat-overlay{position:fixed;inset:0;background:var(--paper);z-index:50;display:none;
+       align-items:center;justify-content:center;padding:20px;opacity:1;transition:opacity .45s}
+  .oyat-overlay.show{display:flex}
+  .oyat-overlay.hide{opacity:0;pointer-events:none}
+  .oyat-card{max-width:560px;width:100%;background:var(--card);border:1px solid var(--line);
+       border-radius:22px;padding:34px 28px;text-align:center}
+  .bismillah{font-family:'Amiri',serif;font-size:19px;color:var(--muted);margin-bottom:18px}
+  .oyat-arab{font-family:'Amiri',serif;font-size:30px;line-height:2.1;margin-bottom:18px}
+  .oyat-uz{font-size:15px;line-height:1.7;color:var(--ink);margin-bottom:8px}
+  .oyat-ref{font-size:13px;color:var(--muted);margin-bottom:22px}
+  .oyat-btn{background:var(--lapis);color:#fff;border:none;border-radius:12px;
+       padding:12px 30px;font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;cursor:pointer}
+  .oyat-btn:hover{background:var(--lapis-deep)}
+  .mehmon{margin-top:18px}
+  .mehmon .card{font-size:14px;color:var(--muted);line-height:1.7}
+  .mehmon b{color:var(--ink)}
 </style>
 </head>
 <body>
+<div class="oyat-overlay" id="oyatOverlay">
+  <div class="oyat-card">
+    <div class="bismillah" dir="rtl">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>
+    <div class="oyat-arab" id="oyatArab" dir="rtl"></div>
+    <div class="oyat-uz" id="oyatUz"></div>
+    <div class="oyat-ref" id="oyatRef"></div>
+    <button class="oyat-btn" id="oyatOk">O'qidim ✓</button>
+  </div>
+</div>
 <div class="wrap">
   <div class="eyebrow">Shaxsiy kalendar</div>
   <h1 id="ttl"><span class="accent">Jahongir</span>ning kalendari</h1>
@@ -120,6 +145,10 @@
       <p>Uchrashuv belgilamoqchimisiz? To'g'ridan-to'g'ri yozing:</p>
       <a class="btn-contact" id="tgLink" href="#" target="_blank" rel="noopener">✈️ Telegramda bog'lanish</a>
     </div>
+  </div>
+
+  <div class="mehmon" id="mehmonEslatma">
+    <div class="card">🤝 <b>Hurmatli mehmon!</b> Siz bilan uchrashuv belgilaganimizda, biz sizga puldan ham qimmatroq narsamizni — vaqtimiz va energiyamizni ajratamiz. Kelolmaydigan bo'lsangiz, iltimos, <b>oldindan ogohlantiring</b>. Sababsiz kelmay qolish ishonchni so'ndiradi, oldindan xabar berish esa o'zaro hurmatni oshiradi.</div>
   </div>
 </div>
 
@@ -286,6 +315,47 @@ document.getElementById('prevM').onclick=()=>{view.setMonth(view.getMonth()-1);r
 document.getElementById('nextM').onclick=()=>{view.setMonth(view.getMonth()+1);render();
   namozOy(view.getFullYear(),view.getMonth()+1).then(render);};
 load();
+
+/* ======= Egasi uchun: oyat ekrani (?ega=1 bilan yoqiladi) ======= */
+const OYATLAR=[
+ {ref:"Hud surasi, 6-oyat",
+  ar:"وَمَا مِن دَآبَّةٍۢ فِى ٱلْأَرْضِ إِلَّا عَلَى ٱللَّهِ رِزْقُهَا…",
+  uz:"«Yer yuzida o'rmalagan birorta jonzot yo'qki, uning rizqi Allohning zimmasida bo'lmasin...»"},
+ {ref:"Az-Zariyat surasi, 22-oyat",
+  ar:"وَفِى ٱلسَّمَآءِ رِزْقُكُمْ وَمَا تُوعَدُونَ",
+  uz:"«Osmonda rizqingiz va sizga va'da qilingan narsalar bordir.»"},
+ {ref:"Az-Zariyat surasi, 58-oyat",
+  ar:"إِنَّ ٱللَّهَ هُوَ ٱلرَّزَّاقُ ذُو ٱلْقُوَّةِ ٱلْمَتِينُ",
+  uz:"«Albatta, Alloh — O'zi rizq beruvchi, quvvat egasi, mustahkamdir.»"},
+ {ref:"Al-Ankabut surasi, 60-oyat",
+  ar:"وَكَأَيِّن مِّن دَآبَّةٍۢ لَّا تَحْمِلُ رِزْقَهَا ٱللَّهُ يَرْزُقُهَا وَإِيَّاكُمْ…",
+  uz:"«Qancha-qancha jonzotlar borki, o'z rizqini ko'tarib yura olmaydi. Ularga ham, sizlarga ham Alloh rizq beradi...»"},
+ {ref:"An-Niso surasi, 78-oyat",
+  ar:"أَيْنَمَا تَكُونُوا۟ يُدْرِككُّمُ ٱلْمَوْتُ وَلَوْ كُنتُمْ فِى بُرُوجٍۢ مُّشَيَّدَةٍۢ…",
+  uz:"«Qayerda bo'lsangiz ham, hatto mustahkam qal'alar ichida bo'lsangiz ham, o'lim sizni topib oladi...»"},
+ {ref:"Oli Imron surasi, 145-oyat",
+  ar:"وَمَا كَانَ لِنَفْسٍ أَن تَمُوتَ إِلَّا بِإِذْنِ ٱللَّهِ كِتَٰبًۭا مُّؤَجَّلًۭا…",
+  uz:"«Hech bir jon Allohning izni va belgilangan ajal yozuvisiz o'lmaydi...»"},
+];
+const urlp=new URLSearchParams(location.search);
+if(urlp.get('ega')==='1')localStorage.setItem('kal_ega','1');
+if(urlp.get('ega')==='0')localStorage.removeItem('kal_ega');
+const EGA=localStorage.getItem('kal_ega')==='1';
+if(EGA){
+  document.getElementById('mehmonEslatma').style.display='none';
+  const ov=document.getElementById('oyatOverlay');
+  const i=(parseInt(localStorage.getItem('kal_oyat'),10)||0)%OYATLAR.length;
+  const o=OYATLAR[i];
+  document.getElementById('oyatArab').textContent=o.ar;
+  document.getElementById('oyatUz').textContent=o.uz;
+  document.getElementById('oyatRef').textContent=o.ref+' · '+(i+1)+'/'+OYATLAR.length;
+  ov.classList.add('show');
+  document.getElementById('oyatOk').onclick=()=>{
+    localStorage.setItem('kal_oyat',String((i+1)%OYATLAR.length));
+    ov.classList.add('hide');
+    setTimeout(()=>{ov.classList.remove('show','hide');},500);
+  };
+}
 </script>
 </body>
 </html>
