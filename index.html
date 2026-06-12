@@ -82,7 +82,7 @@
 <div class="wrap">
   <div class="eyebrow">Shaxsiy kalendar</div>
   <h1 id="ttl"><span class="accent">Jahongir</span>ning kalendari</h1>
-  <p class="sub">Har kunda bandlik foizi ko'rsatilgan (09:00–18:00 ish vaqtiga nisbatan). Yashil — bo'sh, sariq — yarim band, qizil — band. Bo'sh kunni tanlab, pastdagi tugma orqali bog'laning.</p>
+  <p class="sub">Har kunda bandlik foizi ko'rsatilgan — kunning ish oynasiga nisbatan (bomdoddan xufton kirgandan 3 soat o'tgunigacha). Yashil — bo'sh, sariq — yarim band, qizil — band. Bo'sh kunni tanlab, pastdagi tugma orqali bog'laning.</p>
   <div class="err" id="err"></div>
 
   <div class="stats">
@@ -128,9 +128,10 @@
 const OWNER_NAME = "Jahongir";
 const TG_USERNAME = "sp_business_agency";
 const EVENTS_URL = "events.json"; // sayt bilan bir xil repoda tursa shuni o'zgartirmang
-const ISH_BOSHI = 9;      // ish kuni boshlanishi (soat) - 100% shu oraliqqa nisbatan
-const ISH_OXIRI = 18;     // ish kuni tugashi (soat)
 const STANDART_SOAT = 1;  // tugash vaqti aytilmagan uchrashuv davomiyligi (soat)
+const LAT = 41.2995, LON = 69.2401; // Toshkent (namoz vaqtlari uchun)
+/* Ish oynasi: bomdod kirishidan xufton kirgandan 3 soat o'tgunigacha.
+   Vaqtlar Aladhan API'dan olinadi; olinmasa 09:00-18:00 zaxira ishlaydi. */
 /* ============================================================= */
 
 const MONTHS=["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
@@ -146,12 +147,40 @@ document.getElementById('tgLink').href='https://t.me/'+TG_USERNAME.replace('@','
 function pad(n){return String(n).padStart(2,'0')}
 function dkey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function toMin(t){const p=String(t).split(':');return (+p[0])*60+(+p[1]||0)}
+function mmStr(min){return pad(Math.floor(min/60))+':'+pad(min%60)}
+
+const NAMOZ={};
+async function namozOy(y,m){
+  const key=y+'-'+m;
+  if(key in NAMOZ)return NAMOZ[key];
+  try{
+    const r=await fetch('https://api.aladhan.com/v1/calendar/'+y+'/'+m+
+      '?latitude='+LAT+'&longitude='+LON+'&method=3');
+    if(!r.ok)throw new Error(r.status);
+    const j=await r.json();
+    const o={};
+    j.data.forEach(d=>{
+      const f=d.timings.Fajr.slice(0,5).split(':'),
+            x=d.timings.Isha.slice(0,5).split(':');
+      let s=(+f[0])*60+(+f[1]), e=(+x[0])*60+(+x[1])+180;
+      if(e>1439)e=1439;
+      o[parseInt(d.date.gregorian.day,10)]=[s,e];
+    });
+    NAMOZ[key]=o;
+  }catch(err){NAMOZ[key]=null;}
+  return NAMOZ[key];
+}
+function kunOyna(k){
+  const d=new Date(k+'T00:00:00');
+  const o=NAMOZ[d.getFullYear()+'-'+(d.getMonth()+1)];
+  return (o&&o[d.getDate()])||[540,1080];
+}
 
 function dayBusyPct(k){
   const evs=events.filter(e=>e.date===k);
   if(!evs.length)return 0;
   if(evs.some(e=>!e.time))return 100;
-  const W0=ISH_BOSHI*60,W1=ISH_OXIRI*60;
+  const w=kunOyna(k),W0=w[0],W1=w[1];
   const ivs=evs.map(e=>{
     const s=toMin(e.time);
     const en=e.end?toMin(e.end):s+STANDART_SOAT*60;
@@ -191,6 +220,17 @@ async function load(){
     er.style.display='block';
     er.textContent="Uchrashuvlarni yuklab bo'lmadi — birozdan keyin sahifani yangilang.";
   }
+  const now=new Date(),mon=new Date(now);
+  mon.setDate(now.getDate()-((now.getDay()+6)%7));
+  const sat=new Date(mon);sat.setDate(mon.getDate()+5);
+  const oylar=new Set([
+    view.getFullYear()+'/'+(view.getMonth()+1),
+    mon.getFullYear()+'/'+(mon.getMonth()+1),
+    sat.getFullYear()+'/'+(sat.getMonth()+1),
+  ]);
+  await Promise.all([...oylar].map(s=>{
+    const a=s.split('/');return namozOy(+a[0],+a[1]);
+  }));
   render();renderPanel();
 }
 
@@ -225,12 +265,13 @@ function renderPanel(){
   pd.textContent=d.getDate()+' '+MONTHS[d.getMonth()]+', '+WD[d.getDay()].toLowerCase();
   const evs=events.filter(e=>e.date===selected).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
   list.innerHTML='';
+  const w=kunOyna(selected),oynaTxt='ish oynasi '+mmStr(w[0])+'-'+mmStr(w[1]);
   if(!evs.length){
-    ps.textContent='Bu kun bo\u02bbsh';
+    ps.textContent='Bu kun bo\u02bbsh · '+oynaTxt;
     list.innerHTML='<div class="free-badge">✓ Uchrashuv uchun qulay kun</div>';
     return;
   }
-  ps.textContent=evs.length+' ta uchrashuv — kun '+dayBusyPct(selected)+'% band';
+  ps.textContent=evs.length+' ta uchrashuv — kun '+dayBusyPct(selected)+'% band · '+oynaTxt;
   evs.forEach(e=>{
     const row=document.createElement('div');row.className='ev';
     const t=document.createElement('span');t.className='ev-time';
@@ -240,8 +281,10 @@ function renderPanel(){
   });
 }
 
-document.getElementById('prevM').onclick=()=>{view.setMonth(view.getMonth()-1);render();};
-document.getElementById('nextM').onclick=()=>{view.setMonth(view.getMonth()+1);render();};
+document.getElementById('prevM').onclick=()=>{view.setMonth(view.getMonth()-1);render();
+  namozOy(view.getFullYear(),view.getMonth()+1).then(render);};
+document.getElementById('nextM').onclick=()=>{view.setMonth(view.getMonth()+1);render();
+  namozOy(view.getFullYear(),view.getMonth()+1).then(render);};
 load();
 </script>
 </body>
