@@ -92,6 +92,25 @@
   .mehmon{margin-top:18px}
   .mehmon .card{font-size:14px;color:var(--muted);line-height:1.7}
   .mehmon b{color:var(--ink)}
+  .slots{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
+  .slot{font-size:14px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;
+        background:var(--card);cursor:pointer;font-weight:700;color:var(--lapis);
+        font-family:'Manrope',sans-serif}
+  .slot:hover{border-color:var(--lapis)}
+  .slot.act{background:var(--lapis);color:#fff;border-color:var(--lapis)}
+  .bookform{margin-top:12px;display:none}
+  .bookform.show{display:block}
+  .bookform label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
+  .bookform input{width:100%;font-family:'Manrope',sans-serif;font-size:14px;
+        padding:9px 11px;border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+  .bookform input:focus{outline:none;border-color:var(--lapis)}
+  .book-btn{margin-top:12px;width:100%;background:var(--lapis);color:#fff;border:none;
+        border-radius:10px;padding:11px;font-family:'Manrope',sans-serif;font-weight:700;
+        font-size:14px;cursor:pointer}
+  .book-btn:hover{background:var(--lapis-deep)}
+  .book-btn:disabled{opacity:.6;cursor:default}
+  .book-ok{background:#E7F7F0;color:#1d8a5f;font-weight:700;font-size:14px;
+        border-radius:12px;padding:12px 14px;margin-top:10px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -157,7 +176,9 @@
 const OWNER_NAME = "Jahongir";
 const TG_USERNAME = "sp_business_agency";
 const EVENTS_URL = "events.json"; // sayt bilan bir xil repoda tursa shuni o'zgartirmang
+const BOT_API = "https://kalendar-bot-us.onrender.com"; // bron so'rovlari shu yerga boradi
 const STANDART_SOAT = 1;  // tugash vaqti aytilmagan uchrashuv davomiyligi (soat)
+const BOOK_BOSH = 9*60, BOOK_OXIRI = 19*60; // mijoz bron qila oladigan soat oralig'i
 const LAT = 41.2995, LON = 69.2401; // Toshkent (namoz vaqtlari uchun)
 /* Ish oynasi: bomdod kirishidan xufton kirgandan 3 soat o'tgunigacha.
    Vaqtlar Aladhan API'dan olinadi; olinmasa 09:00-18:00 zaxira ishlaydi. */
@@ -167,6 +188,11 @@ const MONTHS=["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sen
 const WD=["Yakshanba","Dushanba","Seshanba","Chorshanba","Payshanba","Juma","Shanba"];
 let events=[],view=new Date(),selected=null;
 view.setDate(1);
+
+const urlp=new URLSearchParams(location.search);
+if(urlp.get('ega')==='1')localStorage.setItem('kal_ega','1');
+if(urlp.get('ega')==='0')localStorage.removeItem('kal_ega');
+const EGA=localStorage.getItem('kal_ega')==='1';
 
 document.getElementById('ttl').innerHTML='<span class="accent"></span>ning kalendari';
 document.getElementById('ttl').querySelector('.accent').textContent=OWNER_NAME;
@@ -286,6 +312,23 @@ function render(){
   document.getElementById('weekPct').textContent=weekPct()+'%';
 }
 
+function boshSlotlar(k){
+  const evs=events.filter(e=>e.date===k);
+  if(evs.some(e=>!e.time))return [];
+  const w=kunOyna(k);
+  let w0=Math.max(w[0],BOOK_BOSH), w1=Math.min(w[1],BOOK_OXIRI);
+  const now=new Date();
+  if(k===dkey(now)){const nm=now.getHours()*60+now.getMinutes();
+    w0=Math.max(w0,Math.ceil((nm+30)/60)*60);}
+  const busy=evs.map(e=>{const s=toMin(e.time);
+    return [s,e.end?toMin(e.end):s+STANDART_SOAT*60];});
+  const res=[];
+  for(let t=Math.ceil(w0/60)*60;t+60<=w1;t+=60){
+    if(!busy.some(b=>t<b[1]&&b[0]<t+60))res.push(mmStr(t));
+  }
+  return res;
+}
+
 function renderPanel(){
   const pd=document.getElementById('panelDate'),ps=document.getElementById('panelSub'),
         list=document.getElementById('evList');
@@ -295,6 +338,7 @@ function renderPanel(){
   const evs=events.filter(e=>e.date===selected).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
   list.innerHTML='';
   const w=kunOyna(selected),oynaTxt='ish oynasi '+mmStr(w[0])+'-'+mmStr(w[1]);
+  if(EGA){
   if(!evs.length){
     ps.textContent='Bu kun bo\u02bbsh · '+oynaTxt;
     list.innerHTML='<div class="free-badge">✓ Uchrashuv uchun qulay kun</div>';
@@ -308,6 +352,60 @@ function renderPanel(){
     const tt=document.createElement('span');tt.className='ev-title';tt.textContent=e.title;
     row.append(t,tt);list.appendChild(row);
   });
+    return;
+  }
+
+  // MEHMON: faqat bandlik + bo'sh slotlar (bron qilish)
+  ps.textContent='Bu kun '+dayBusyPct(selected)+'% band';
+  const gec=new Date();gec.setHours(0,0,0,0);
+  if(d<gec){list.innerHTML='<div class="empty-msg">Oʻtgan kun.</div>';return;}
+  const slots=boshSlotlar(selected);
+  if(!slots.length){
+    list.innerHTML='<div class="empty-msg">Bu kun uchun boʻsh vaqt qolmagan. Iltimos, boshqa kunni tanlang.</div>';
+    return;
+  }
+  const lbl=document.createElement('div');lbl.className='panel-sub';lbl.style.margin='0 0 2px';
+  lbl.textContent='Boʻsh vaqtni tanlab, bron qiling:';
+  const sl=document.createElement('div');sl.className='slots';
+  const form=document.createElement('div');form.className='bookform';
+  form.innerHTML='<label>Ismingiz</label><input id="bk_name" maxlength="60" autocomplete="name">'
+    +'<label>Aloqa (telefon yoki Telegram)</label><input id="bk_contact" maxlength="60">'
+    +'<label>Mavzu (ixtiyoriy)</label><input id="bk_topic" maxlength="100">'
+    +'<button class="book-btn" id="bk_send">Soʻrov yuborish</button>'
+    +'<div id="bk_msg"></div>';
+  let chosen=null;
+  slots.forEach(tv=>{
+    const b=document.createElement('button');b.className='slot';b.textContent=tv;
+    b.onclick=()=>{chosen=tv;[...sl.children].forEach(c=>c.classList.remove('act'));
+      b.classList.add('act');form.classList.add('show');};
+    sl.appendChild(b);
+  });
+  list.append(lbl,sl,form);
+  form.querySelector('#bk_send').onclick=async()=>{
+    const name=form.querySelector('#bk_name').value.trim();
+    const contact=form.querySelector('#bk_contact').value.trim();
+    const topic=form.querySelector('#bk_topic').value.trim();
+    const msg=form.querySelector('#bk_msg'),btn=form.querySelector('#bk_send');
+    if(!chosen){msg.innerHTML='<div class="empty-msg">Avval vaqtni tanlang.</div>';return;}
+    if(name.length<2||contact.length<3){
+      msg.innerHTML='<div class="empty-msg">Ism va aloqani toʻldiring.</div>';return;}
+    btn.disabled=true;btn.textContent='Yuborilmoqda...';msg.innerHTML='';
+    try{
+      const r=await fetch(BOT_API+'/book',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({date:selected,time:chosen,name,contact,topic})});
+      const j=await r.json();
+      if(!j.ok)throw new Error(j.error||'xato');
+      msg.innerHTML='<div class="book-ok">✅ Soʻrovingiz yuborildi! '+OWNER_NAME
+        +' tez orada siz bilan bogʻlanadi.</div>';
+      form.querySelectorAll('input').forEach(x=>x.disabled=true);
+      btn.style.display='none';
+      [...sl.children].forEach(c=>{c.disabled=true;c.style.opacity='.5';});
+    }catch(e){
+      msg.innerHTML='<div class="empty-msg">Yuborishda xato. Birozdan keyin qayta urinib koʻring.</div>';
+      btn.disabled=false;btn.textContent='Soʻrov yuborish';
+    }
+  };
 }
 
 document.getElementById('prevM').onclick=()=>{view.setMonth(view.getMonth()-1);render();
@@ -337,10 +435,6 @@ const OYATLAR=[
   ar:"وَمَا كَانَ لِنَفْسٍ أَن تَمُوتَ إِلَّا بِإِذْنِ ٱللَّهِ كِتَٰبًۭا مُّؤَجَّلًۭا…",
   uz:"«Hech bir jon Allohning izni va belgilangan ajal yozuvisiz o'lmaydi...»"},
 ];
-const urlp=new URLSearchParams(location.search);
-if(urlp.get('ega')==='1')localStorage.setItem('kal_ega','1');
-if(urlp.get('ega')==='0')localStorage.removeItem('kal_ega');
-const EGA=localStorage.getItem('kal_ega')==='1';
 if(EGA){
   document.getElementById('mehmonEslatma').style.display='none';
   const ov=document.getElementById('oyatOverlay');
