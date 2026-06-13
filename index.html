@@ -396,8 +396,11 @@ function renderPanel(){
         body:JSON.stringify({date:selected,time:chosen,name,contact,topic})});
       const j=await r.json();
       if(!j.ok)throw new Error(j.error||'xato');
-      msg.innerHTML='<div class="book-ok">✅ Soʻrovingiz yuborildi! '+OWNER_NAME
-        +' tez orada siz bilan bogʻlanadi.</div>';
+      const link=j.link||'';
+      msg.innerHTML='<div class="book-ok">✅ Soʻrovingiz yuborildi!<br>'
+        +'📱 Tasdiq va eslatma olish uchun Telegram orqali ulaning:</div>'
+        +(link?'<a class="book-btn" style="display:block;text-align:center;text-decoration:none;margin-top:10px" href="'
+          +link+'" target="_blank" rel="noopener">📱 Telegramda ulanish</a>':'');
       form.querySelectorAll('input').forEach(x=>x.disabled=true);
       btn.style.display='none';
       [...sl.children].forEach(c=>{c.disabled=true;c.style.opacity='.5';});
