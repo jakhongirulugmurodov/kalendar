@@ -351,6 +351,13 @@ function monthPct(){
 }
 
 async function load(){
+  // Tashqi havoladan kelgan ?kun=YYYY-MM-DD — o'sha kunni ochib tanlaymiz
+  const _kun=urlp.get('kun');
+  if(_kun&&/^\d{4}-\d{2}-\d{2}$/.test(_kun)){
+    const _p=_kun.split('-').map(Number);
+    view=new Date(_p[0],_p[1]-1,1);
+    selected=_kun;
+  }
   try{
     const r=await fetch(EVENTS_URL+'?t='+Date.now());
     if(!r.ok)throw new Error(r.status);
